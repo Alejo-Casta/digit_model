@@ -2,51 +2,47 @@ import numpy as np
 
 
 class PCA:
+
     def __init__(self, n_components):
+        # initialize the class with the number of main components you want to get
         self.n_components = n_components
         self.mean = None
         self.components = None
 
     def fit(self, X):
-        # Compute mean of input data
+        # center the data
         self.mean = np.mean(X, axis=0)
-        X = X - self.mean
-
-        # Compute covariance matrix
-        cov = np.cov(X, rowvar=False)
-
-        # Compute eigenvectors and eigenvalues of covariance matrix
-        eigenvalues, eigenvectors = np.linalg.eigh(cov)
-
-        # Sort eigenvectors by decreasing eigenvalue
-        idx = np.argsort(eigenvalues)[::-1]
-        eigenvectors = eigenvectors[:, idx]
-
-        # Store the first n_components eigenvectors as components
-        self.components = eigenvectors[:, :self.n_components]
+        self.transform(X)
 
     def transform(self, X):
-        # Project input data onto the first n_components eigenvectors
-        X = X - self.mean
-        return np.dot(X, self.components)
-
-    def fit_transform(self, X):
-        # Compute mean of input data
-        self.mean = np.mean(X, axis=0)
         X = X - self.mean
 
-        # Compute covariance matrix
-        cov = np.cov(X, rowvar=False)
+        # Compute the covariance matrix
+        cov_matrix = np.cov(X, rowvar=False)
 
-        # Compute eigenvectors and eigenvalues of covariance matrix
-        eigenvalues, eigenvectors = np.linalg.eigh(cov)
+        # Compute the eigenvalues and eigenvectors of the covariance matrix
+        eigenvalues, eigenvectors = np.linalg.eig(cov_matrix)
 
-        # Sort eigenvectors by decreasing eigenvalue
-        idx = np.argsort(eigenvalues)[::-1]
-        eigenvectors = eigenvectors[:, idx]
+        # Order the eigenvalues and eigenvectors from largest to smallest
+        sorted_indexes = np.argsort(eigenvalues)[::-1]
+        eigenvalues = eigenvalues[sorted_indexes]
+        eigenvectors = eigenvectors[:, sorted_indexes]
 
-        # Store the first n_components eigenvectors as components
+        # Select the first n eigenvector components
         self.components = eigenvectors[:, :self.n_components]
 
-        # Project input data onto the first n_components eigenvectors
-        return np.dot(X, self.components)
+    def fit_transform(self, X):
+        # Center the data
+        X = X - self.mean
+
+        # Project the data into the principal components
+        X_transformed = np.dot(X, self.components)
+
+        return X_transformed
+
+    def inverse_transform(self, X):
+        '''
+        invert the transform
+        '''
+        X_reconstructed = (X @ self.components).dot(self.components.T) + np.mean(X, axis=0)
+        return X_reconstructed
