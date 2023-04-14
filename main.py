@@ -1,64 +1,82 @@
 import numpy as np
-from sklearn.datasets import fetch_openml
 from PCA import PCA
-from TSNE import TSNE
 from SVD import SVD
-from sklearn.metrics import accuracy_score
+from sklearn.datasets import fetch_openml
+from sklearn.linear_model import LogisticRegression
 from sklearn.model_selection import train_test_split
+from flask import Flask, request
+from PIL import Image
 
 # Load the MNIST dataset
 mnist = fetch_openml('mnist_784')
 
-X = mnist.data.astype('float32')
+x = mnist.data.astype('float32')
 y = mnist.target.astype('int64')
 
-method = "PCA"
+x, y = x[:10000], y[:10000]
 
-if method == "PCA":
-    # Dimensionality reduction using PCA
-    pca = PCA(n_components=50)
-    pca.fit(X)
-    X_train_model = pca.fit_transform(X)
-    X_train_model = np.real(X_train_model)
-    # Split the dataset into training and testing sets
-    X_train, X_test, y_train, y_test = train_test_split(X_train_model, y, test_size=0.2, random_state=42)
-    # X_test_pca = pca.fit_transform(X_test)
 
-elif method == "SVD":
-    # Dimensionality reduction using SVD
-    svd = SVD(n_components=2)
-    svd.fit(X)
-    X_train_model = svd.fit_transform(X)
-    X_train, X_test, y_train, y_test = train_test_split(X_train_model, y, test_size=0.2, random_state=42)
-    # X_test_pca = svd.fit_transform(X_test)
+def model(img, method):
+    if method == "PCA":
+        # Dimensionality reduction using PCA
+        pca = PCA(n_components=50)
+        pca.fit(x)
+        x_train_model = pca.fit_transform(x)
+        x_train_model = np.real(x_train_model)
+        x_train, x_test, y_train, y_test = train_test_split(x_train_model, y, test_size=0.2, random_state=42)
+        clf = LogisticRegression(penalty='none', random_state=0, max_iter=1000)
+        clf.fit(x_train, y_train)
+        accuracy = clf.score(x_test, y_test)
 
-elif method == "TSNE":
-    # Dimensionality reduction using t-SNE
-    tsne = TSNE(n_components=50, perplexity=50)
-    tsne.fit(X)
-    X_train_model = tsne.transform(X)
-    X_train, X_test, y_train, y_test = train_test_split(X_train_model, y, test_size=0.2, random_state=42)
-    # X_test_pca = tsne.transform(X_test)
+        img_reduce = pca.fit_transform(img)
+        img_reduce = np.real(img_reduce)
+        predicted_cluster = clf.predict(img_reduce)
+        return accuracy, predicted_cluster
 
-else:
-    raise ValueError("Invalid method selected.")
+    elif method == "SVD":
+        # Dimensionality reduction using SVD
+        svd = SVD(n_components=70)
+        svd.fit(x)
+        x_train_model = svd.fit_transform(x)
+        x_train, x_test, y_train, y_test = train_test_split(x_train_model, y, test_size=0.2, random_state=42)
+        clf = LogisticRegression(penalty='none', random_state=0, max_iter=1000)
+        clf.fit(x_train, y_train)
+        accuracy = clf.score(x_test, y_test)
 
-# # Train a k-means clustering model on the reduced data
-# from sklearn.cluster import KMeans
-# k = 10
-# kmeans = KMeans(n_clusters=k)
-# kmeans.fit(X_train, y_train)
-# predicted_cluster = kmeans.predict(X_test)
+        img_reduce = svd.fit_transform(img)
+        img_reduce = np.real(img_reduce)
+        predicted_cluster = clf.predict(img_reduce)
+        return accuracy, predicted_cluster
 
-from sklearn.linear_model import LogisticRegression
-clf = LogisticRegression(penalty='none', random_state=0, max_iter=1000)
-clf.fit(X_train, y_train)
-predicted_cluster = clf.predict(X_test)
+    else:
+        raise ValueError("Invalid method selected.")
 
-for i, value in enumerate(predicted_cluster):
-    # Print the predicted cluster and actual label of the new record
-    print("Predicted cluster:", value)
-    print("Actual label:", y_test.iloc[i])
 
-accuracy = accuracy_score(y_test, predicted_cluster)
-print(accuracy)
+def convert_image(image_file):
+    img = Image.open(image_file)
+    img = img.convert('L')
+    img = img.resize((28, 28))
+    img_array = np.array(img)
+    image_reshape = img_array.reshape(1, -1)
+    return image_reshape
+
+
+app = Flask(__name__)
+
+
+@app.route('/digit', methods=['POST'])
+def convert_image_to_array():
+    # get the image file from the request
+    image_file = request.files['image']
+    method = request.values['data']
+
+    image_array = convert_image(image_file)
+
+    accuracy, predict = model(image_array, method)
+
+    # return the array as a JSON response
+    return {'accuracy': accuracy, 'predict': int(predict[0])}
+
+
+if __name__ == '__main__':
+    app.run()
